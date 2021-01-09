@@ -1,0 +1,468 @@
+---
+title: "Final Pathway Code"
+author: "Jilly Hebert"
+date: "July 17, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+library(ggplot2)
+library(MASS)
+library(rpart)
+library(rpart.plot)
+library(ggpubr)
+library(RColorBrewer)
+
+```
+
+
+#Load Dataset
+```{r}
+
+load("29961-0001-Data.rda")
+assign("baseline", da29961.0001)
+
+```
+
+
+#Removing Variables Masked for Confidentiality
+```{r}
+
+conf <- c("S0INTLOC_FACODE", "S0TAGE", "S0ETHCTY", "S0DEM20", "S0REL168", "S0REL170", "S0BORS", "S0AGEBS", "S0RESBS","S0BORS2", "S0AGEBS2", "S0RESBS2", "S0BORS3", "S0AGEBS3", "S0RESBS3", "S0BORS4", "S0AGEBS4", "S0RESBS4", "S0BORS5", "S0AGEBS5", "S0RESBS5", "S0BORS6", "S0AGEBS6", "S0RESBS6", "S0BORS7", "S0AGEBS7", "S0RESBS7", "S0BORS8", "S0AGEBS8", "S0RESBS8", "S0BORS9", "S0AGEBS9", "S0RESBS9", "S0BORS10", "S0AGEBS10", "S0RESBS10", "S0REL102", "S0SCH_COMMCODE", "S0SCH_DETCODE", "S0DEM50C", "S0GANGCODE_GANG6MO", "S0GANGCODE_GANGEVER", "S0AGECH", "S0OTHRCH", "S0AGECH2", "S0OTHRCH2", "S0PHIN23", "S0PHIN25", "S0OFFHX0", "S0OFFHXA", "S0OFFHX1", "S0OFFHXB", "S0OFFHX2", "S0OFFHX3", "S0OFFHX4", "S0OFFCU2", "S0OFFCU3", "S0OFFCU4", "S0OFFHX6", "S0SROA61", "S0RON61", "S0SROL76", "S0SRO112", "S0SRO113", "S0SROS62", "S0SROA62", "S0SRON62", "S0SROL77", "S0SRO114", "S0SRO115", "S0PRIORMED01", "S0PRIORMED02","S0PRIORMED03", "S0PRIORMED04","S0PRIORMED05", "S0PRIORMED06", "S0PAST6MOMED01", "S0PAST6MOMED02", "S0PAST6MOMED03", "S0PAST6MOMED04","S0PAST6MOMED05") #81 masked
+
+baseline <- baseline[, !(names(baseline) %in% conf)] #dropped 75
+
+```
+
+
+#Mental Health Variable
+```{r}
+
+#Mental health problems in your lifetime
+lbls <- sort(levels(baseline$S0MDD))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0MDD <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0MDD))
+baseline$S0MDD <- add.value.labels(baseline$S0MDD, lbls)
+baseline$S0MDD[is.na(baseline$S0MDD)] <- 0
+
+lbls <- sort(levels(baseline$S0DYS))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0DYS <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0DYS))
+baseline$S0DYS <- add.value.labels(baseline$S0DYS, lbls)
+baseline$S0DYS[is.na(baseline$S0DYS)] <- 0
+
+lbls <- sort(levels(baseline$S0MANIA))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0MANIA <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0MANIA))
+baseline$S0MANIA <- add.value.labels(baseline$S0MANIA, lbls)
+baseline$S0MANIA[is.na(baseline$S0MANIA)] <- 0
+
+lbls <- sort(levels(baseline$S0PTSD))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0PTSD <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0PTSD))
+baseline$S0PTSD <- add.value.labels(baseline$S0PTSD, lbls)
+baseline$S0PTSD[is.na(baseline$S0PTSD)] <- 0
+
+baseline <- baseline %>% mutate(MH_LIFE = (S0MDD | S0DYS | S0MANIA | S0PTSD))
+baseline$MH_LIFE[is.na(baseline$MH_LIFE)] <- 0
+
+table(baseline$MH_LIFE) #194 participants with MH symptoms in their lifetime
+
+```
+
+
+#Substance Variable
+```{r}
+
+#Drug abuse/dependence in the past year
+lbls <- sort(levels(baseline$S0DRUABU12))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0DRUABU12 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0DRUABU12))
+baseline$S0DRUABU12 <- add.value.labels(baseline$S0DRUABU12, lbls)
+baseline$S0DRUABU12[is.na(baseline$S0DRUABU12)] <- 0
+
+lbls <- sort(levels(baseline$S0DRUDEP12))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0DRUDEP12 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0DRUDEP12))
+baseline$S0DRUDEP12 <- add.value.labels(baseline$S0DRUDEP12, lbls)
+baseline$S0DRUDEP12[is.na(baseline$S0DRUABU12)] <- 0
+
+baseline <- baseline %>% mutate(DRUG_YEAR = (S0DRUABU12 | S0DRUDEP12))
+baseline$DRUG_YEAR[is.na(baseline$DRUG_YEAR)] <- 0
+
+table(baseline$DRUG_YEAR) #415 participants using drugs in the past year
+
+
+
+#Alcohol abuse/dependence in the past year
+lbls <- sort(levels(baseline$S0ALCABU12))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0ALCABU12 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0ALCABU12))
+baseline$S0ALCABU12 <- add.value.labels(baseline$S0ALCABU12, lbls)
+baseline$S0ALCABU12[is.na(baseline$S0ALCABU12)] <- 0
+
+lbls <- sort(levels(baseline$S0ALCDEP12))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0ALCDEP12 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0ALCDEP12))
+baseline$S0ALCDEP12 <- add.value.labels(baseline$S0ALCDEP12, lbls)
+baseline$S0ALCDEP12[is.na(baseline$S0ALCDEP12)] <- 0
+
+baseline <- baseline %>% mutate(ALC_YEAR = (S0ALCABU12 | S0ALCDEP12))
+baseline$ALC_YEAR[is.na(baseline$ALC_YEAR)] <- 0
+
+table(baseline$ALC_YEAR) #203 participants using alcohol in the past year
+
+
+#Creating substance variable
+baseline <- baseline %>% mutate(SUB_YEAR = DRUG_YEAR | ALC_YEAR)
+table(baseline$SUB_YEAR) #470 participants using substances in the past year
+
+```
+
+
+#Criminal Activity Variable
+```{r}
+
+#Criminal activity variables summation of multiple other variables. All variables being used were converted to numeric. All NA's were replaced to 0.
+
+baseline$S0SRON49 <- as.numeric(baseline$S0SRON49)
+baseline$S0SRON49[is.na(baseline$S0SRON49)] <- 0
+
+baseline$S0SRON50 <- as.numeric(baseline$S0SRON50)
+baseline$S0SRON50[is.na(baseline$S0SRON50)] <- 0
+
+baseline$S0SRON51 <- as.numeric(baseline$S0SRON51)
+baseline$S0SRON51[is.na(baseline$S0SRON51)] <- 0
+
+baseline$S0SRON52 <- as.numeric(baseline$S0SRON52)
+baseline$S0SRON52[is.na(baseline$S0SRON52)] <- 0
+
+baseline$S0SRON53 <- as.numeric(baseline$S0SRON53)
+baseline$S0SRON53[is.na(baseline$S0SRON53)] <- 0
+
+baseline$S0SRON54 <- as.numeric(baseline$S0SRON54)
+baseline$S0SRON54[is.na(baseline$S0SRON54)] <- 0
+
+baseline$S0SRON55 <- as.numeric(baseline$S0SRON55)
+baseline$S0SRON55[is.na(baseline$S0SRON55)] <- 0
+
+baseline$S0SRON56 <- as.numeric(baseline$S0SRON56)
+baseline$S0SRON56[is.na(baseline$S0SRON56)] <- 0
+
+baseline$S0SRON57 <- as.numeric(baseline$S0SRON57)
+baseline$S0SRON57[is.na(baseline$S0SRON57)] <- 0
+
+baseline$S0SRON58 <- as.numeric(baseline$S0SRON58)
+baseline$S0SRON58[is.na(baseline$S0SRON58)] <- 0
+
+baseline$S0SRON59 <- as.numeric(baseline$S0SRON59)
+baseline$S0SRON59[is.na(baseline$S0SRON59)] <- 0
+
+baseline$S0SRON60 <- as.numeric(baseline$S0SRON60)
+baseline$S0SRON60[is.na(baseline$S0SRON60)] <- 0
+
+baseline$S0SRON63 <- as.numeric(baseline$S0SRON63)
+baseline$S0SRON63[is.na(baseline$S0SRON63)] <- 0
+
+baseline$S0SRON64 <- as.numeric(baseline$S0SRON64)
+baseline$S0SRON64[is.na(baseline$S0SRON64)] <- 0
+
+baseline$S0SRON65 <- as.numeric(baseline$S0SRON65)
+baseline$S0SRON65[is.na(baseline$S0SRON65)] <- 0
+
+baseline$S0SRON66 <- as.numeric(baseline$S0SRON66)
+baseline$S0SRON66[is.na(baseline$S0SRON66)] <- 0
+
+baseline$S0SRON67 <- as.numeric(baseline$S0SRON67)
+baseline$S0SRON67[is.na(baseline$S0SRON67)] <- 0
+
+baseline$S0SRON68 <- as.numeric(baseline$S0SRON68)
+baseline$S0SRON68[is.na(baseline$S0SRON68)] <- 0
+
+baseline$S0SRON69 <- as.numeric(baseline$S0SRON69)
+baseline$S0SRON69[is.na(baseline$S0SRON69)] <- 0
+
+baseline$S0SRON70 <- as.numeric(baseline$S0SRON70)
+baseline$S0SRON70[is.na(baseline$S0SRON70)] <- 0
+
+baseline$S0SRON71 <- as.numeric(baseline$S0SRON71)
+baseline$S0SRON71[is.na(baseline$S0SRON71)] <- 0
+
+baseline$S0SRON72 <- as.numeric(baseline$S0SRON72)
+baseline$S0SRON72[is.na(baseline$S0SRON72)] <- 0
+
+
+baseline <- baseline %>% mutate(CRIME_FREQ = S0SRON49 + S0SRON50 + S0SRON51 + S0SRON52 + S0SRON53 + S0SRON54 + S0SRON55 + S0SRON56 + S0SRON57 + S0SRON58 + S0SRON59 + S0SRON60 + S0SRON63 + S0SRON64 + S0SRON65 + S0SRON66 + S0SRON67 + S0SRON68 + S0SRON69 + S0SRON70 + S0SRON71 + S0SRON72)
+
+summary(baseline$CRIME_FREQ)
+
+```
+
+
+#Seperation of Groups
+```{r}
+
+#Disorder column created
+baseline$DISORDER <- "NONE"
+baseline$DISORDER[baseline$MH_LIFE == '1'] <- "MH" 
+baseline$DISORDER[baseline$ALC_YEAR == '1' | baseline$DRUG_YEAR == '1'] <- "SUBSTANCE" 
+baseline$DISORDER[baseline$MH_LIFE == '1' & (baseline$ALC_YEAR == '1' | baseline$DRUG_YEAR == '1')] <- "BOTH" 
+
+table(baseline$DISORDER)
+
+```
+
+
+#Clean External Variables
+```{r}
+
+lbls <- sort(levels(baseline$S0SGEND))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0SGEND <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0SGEND))
+baseline$S0SGEND <- add.value.labels(baseline$S0SGEND, lbls)
+
+lbls <- sort(levels(baseline$S0REL300))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0REL300 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0REL300))
+baseline$S0REL300 <- add.value.labels(baseline$S0REL300, lbls)
+baseline$S0REL300[is.na(baseline$S0REL300)] <- 0
+
+lbls <- sort(levels(baseline$S0REL301))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0REL301 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0REL301))
+baseline$S0REL301 <- add.value.labels(baseline$S0REL301, lbls)
+baseline$S0REL301[is.na(baseline$S0REL301)] <- 0
+
+lbls <- sort(levels(baseline$S0REL302))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0REL302 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0REL302))
+baseline$S0REL302 <- add.value.labels(baseline$S0REL302, lbls)
+baseline$S0REL302[is.na(baseline$S0REL302)] <- 0
+
+lbls <- sort(levels(baseline$S0SCH40))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0SCH40 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0SCH40))
+baseline$S0SCH40 <- add.value.labels(baseline$S0SCH40, lbls)
+baseline$S0SCH40[is.na(baseline$S0SCH40)] <- 0
+
+lbls <- sort(levels(baseline$S0SCH42))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0SCH42 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0SCH42))
+baseline$S0SCH42 <- add.value.labels(baseline$S0SCH42, lbls)
+baseline$S0SCH42[is.na(baseline$S0SCH42)] <- 0
+
+lbls <- sort(levels(baseline$S0SCH44))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0SCH44 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0SCH44))
+baseline$S0SCH44 <- add.value.labels(baseline$S0SCH44, lbls)
+baseline$S0SCH44[is.na(baseline$S0SCH44)] <- 0
+
+lbls <- sort(levels(baseline$S0SCH45))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0SCH45 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0SCH45))
+baseline$S0SCH45 <- add.value.labels(baseline$S0SCH45, lbls)
+baseline$S0SCH45[is.na(baseline$S0SCH45)] <- 0
+
+lbls <- sort(levels(baseline$S0DEM28))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0DEM28 <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0DEM28))
+baseline$S0DEM28 <- add.value.labels(baseline$S0DEM28, lbls)
+baseline$S0DEM28[is.na(baseline$S0DEM28)] <- 0
+
+lbls <- sort(levels(baseline$S0FAMSTR))
+lbls <- (sub("^\\([0-9]+\\) +(.+$)", "\\1", lbls))
+baseline$S0FAMSTR <- as.numeric(sub("^\\(0*([0-9]+)\\).+$", "\\1", baseline$S0FAMSTR))
+baseline$S0FAMSTR <- add.value.labels(baseline$S0FAMSTR, lbls)
+baseline$S0FAMSTR[is.na(baseline$S0FAMSTR)] <- 0
+
+baseline <- baseline %>% mutate(SUB_YEAR = (DRUG_YEAR | ALC_YEAR))
+baseline <- baseline %>% mutate(CO_OCC = ((DRUG_YEAR | ALC_YEAR) & MH_LIFE))
+
+cols <- sapply(baseline, is.logical)
+baseline[,cols] <- lapply(baseline[,cols], as.numeric)
+
+```
+
+
+#Create Smaller Dataset
+```{r}
+
+ex_vars <- c("CASEID", "S0AGE", "S0ETHN_R", "S0SGEND", "S0PAEDUC", "S0PAKNOW", "S0PARMNT", "S0DEPSUP", "S0DEPNFS", "S0FRDQLT", "S0PRBEHV", "S0PRINFL", "S0REL300", "S0REL301", "S0REL302", "S0FAMSTR", "S0AGE1STOFFENSE", "S0DEM28", "S0EXPTOT", "S0SCH40", "S0SCH42", "S0SCH44", "S0SCH45", "S0HOOD", "S0NEIPHY", "S0NEISOC", "SUB_YEAR", "MH_LIFE", "S0SRON49", "S0SRON50", "S0SRON51", "S0SRON52", "S0SRON53", "S0SRON54", "S0SRON55", "S0SRON56", "S0SRON57", "S0SRON58", "S0SRON59", "S0SRON60","S0SRON63", "S0SRON64", "S0SRON65", "S0SRON66", "S0SRON67", "S0SRON68", "S0SRON69", "S0SRON70", "S0SRON71", "S0SRON72", "CRIME_FREQ", "DISORDER")
+
+baseline_small <- baseline[, (names(baseline) %in% ex_vars)]
+
+#Remove incomplete rows for model building --> for backward stepping 
+baseline_small <- baseline_small[complete.cases(baseline_small), ] #Down to 1089 rows now
+
+```
+
+
+#Linear Model Building
+```{r}
+
+mod_2 <- lm(log(CRIME_FREQ + 1) ~ S0PAEDUC + S0PAKNOW + S0PARMNT + S0DEPSUP + S0DEPNFS + S0FRDQLT + S0PRBEHV + S0PRINFL + S0REL300 + S0REL301 + S0REL302 + S0FAMSTR + S0AGE1STOFFENSE + S0DEM28 + S0EXPTOT + S0SCH40 + S0SCH42 + S0SCH44 + S0SCH45 + S0HOOD + S0NEIPHY + S0NEISOC + MH_LIFE + SUB_YEAR, data = baseline_small)
+
+step(mod_2, direction = "backward") #Recommended model is  S0PAKNOW + S0PARMNT + S0DEPSUP + S0PRBEHV + S0REL300 + S0REL302 + S0AGE1STOFFENSE + S0EXPTOT + S0SCH42 + S0SCH44 + SUB_YEAR --> no MH_LIFE
+
+backward_log_mod <- lm(log(CRIME_FREQ + 1) ~ S0PAKNOW + S0PARMNT + S0DEPSUP + S0PRBEHV + S0REL300 + S0REL302 + S0AGE1STOFFENSE + S0EXPTOT + S0SCH42 + S0SCH44 + SUB_YEAR + MH_LIFE, data = baseline_small)
+summary(backward_log_mod) #36.71% r2
+par(mfrow = c(2,2))
+plot(backward_log_mod) #Okay
+vif(backward_log_mod) #All below 2
+
+
+fit <- randomForest(CRIME_FREQ ~ S0PAKNOW + S0PARMNT + S0DEPSUP + S0PRBEHV + S0REL300 + S0REL302 + S0AGE1STOFFENSE + S0EXPTOT + S0SCH42 + S0SCH44 + SUB_YEAR + MH_LIFE, data = baseline_small, importance = TRUE)
+varImpPlot(fit,type = 1) #New model will use top 5 variables and target variables
+
+
+backward_log_mod_small <- lm(log(CRIME_FREQ + 1) ~ S0PARMNT + S0PAKNOW + S0PRBEHV + S0EXPTOT + S0AGE1STOFFENSE + SUB_YEAR + MH_LIFE, data = baseline_small)
+summary(backward_log_mod_small) #36.16% r2
+
+backward_mod_interact <- lm(log(CRIME_FREQ + 1) ~ (S0PARMNT + S0PRBEHV + S0EXPTOT + SUB_YEAR + MH_LIFE + S0AGE1STOFFENSE + S0PAKNOW)^2, data = baseline_small)
+step(backward_mod_interact, direction = "backward") #Best model is S0PARMNT + S0PRBEHV + S0EXPTOT + SUB_YEAR + MH_LIFE + S0AGE1STOFFENSE + S0PAKNOW + S0PARMNT:S0PRBEHV + S0PARMNT:S0PAKNOW + S0PRBEHV:MH_LIFE + S0PRBEHV:S0AGE1STOFFENSE + SUB_YEAR:MH_LIFE
+
+backward_small_interact <- lm(log(CRIME_FREQ + 1) ~ S0PARMNT + S0PRBEHV + S0EXPTOT + SUB_YEAR + MH_LIFE + S0AGE1STOFFENSE + S0PAKNOW + S0PARMNT:S0PRBEHV + S0PARMNT:S0PAKNOW + S0PRBEHV:MH_LIFE + S0PRBEHV:S0AGE1STOFFENSE + SUB_YEAR:MH_LIFE, data = baseline_small)
+summary(backward_small_interact) #36.73% r2
+par(mfrow = c(2,2))
+plot(backward_small_interact) #Okay --> couple points in standardized residuals concerning? 
+vif(backward_small_interact)
+
+
+
+baseline_small$MH_LIFE <- factor(baseline_small$MH_LIFE)
+baseline_small$SUB_YEAR <- factor(baseline_small$SUB_YEAR)
+baseline_small$DISORDER <- factor(baseline_small$DISORDER)
+
+model <- lm(log(CRIME_FREQ + 1) ~ S0PARMNT + S0PRBEHV + S0EXPTOT + SUB_YEAR + MH_LIFE + S0AGE1STOFFENSE + S0PAKNOW + S0PARMNT:S0PRBEHV + S0PARMNT:S0PAKNOW + S0PRBEHV:MH_LIFE + S0PRBEHV:S0AGE1STOFFENSE + SUB_YEAR:MH_LIFE, data = baseline_small)
+
+TukeyHSD(model, which = c('MH_LIFE', 'SUB_YEAR', 'SUB_YEAR:MH_LIFE')) #MH no difference, SUB difference
+
+model2 <- lm(log(CRIME_FREQ + 1) ~ S0PARMNT + S0PRBEHV + S0EXPTOT + DISORDER + S0AGE1STOFFENSE + S0PAKNOW + S0PARMNT:S0PRBEHV + S0PARMNT:S0PAKNOW + S0PRBEHV:MH_LIFE + S0PRBEHV:S0AGE1STOFFENSE + SUB_YEAR:MH_LIFE, data = baseline_small)
+
+
+hsd_2 <- HSD.test(model2, "DISORDER", group = T)
+hsd_2
+
+```
+
+
+#Graphics
+```{r}
+
+name_dataset <- baseline_small %>% dplyr::select(CASEID, CRIME_FREQ, S0PRBEHV, S0EXPTOT, SUB_YEAR, S0PARMNT, MH_LIFE, S0PAKNOW, S0AGE1STOFFENSE)
+
+names(name_dataset) <- c("CASEID", "CRIME_FREQ", "Peer_Behavior", "Violence_Exposure", "Substance_Use", "Parental_Monitoring", "Mental_Health", "Parental_Knowledge", "Age_During_1st_Offense")
+
+named_tree <- rpart(CRIME_FREQ ~ Peer_Behavior + Violence_Exposure + Substance_Use + Parental_Monitoring + Mental_Health + Parental_Knowledge + Age_During_1st_Offense, data = name_dataset)
+
+rpart.plot(named_tree, type = 2, extra = 101, cex = 1) #Top number is mean
+
+
+
+fit <- randomForest(CRIME_FREQ ~ Peer_Behavior + Violence_Exposure + Parental_Monitoring + Substance_Use + Mental_Health + Age_During_1st_Offense + Parental_Knowledge, data = name_dataset, importance = TRUE, ntree = 5000)
+varImpPlot(fit,type = 1, main = "Variable Importance", cex = 1.4)
+
+
+
+baseline$DISORDER <- factor(baseline$DISORDER, levels = c("BOTH", "SUBSTANCE", "MH", "NONE"))
+ggplot(baseline, aes(x = factor(DISORDER), y = CRIME_FREQ)) + geom_boxplot()
+disorder_specifics <- baseline %>% group_by(DISORDER, S0SGEND) %>% summarise(mean = mean(CRIME_FREQ), median = median(CRIME_FREQ), sd = sd(CRIME_FREQ), sum = n())
+
+
+mh_dat_M <- baseline[baseline$DISORDER == "MH" & baseline$S0SGEND == "1",]
+mh_dat_F <- baseline[baseline$DISORDER == "MH" & baseline$S0SGEND == "2",]
+sub_dat_M <- baseline[baseline$DISORDER == "SUBSTANCE" & baseline$S0SGEND == "1",]
+sub_dat_F <- baseline[baseline$DISORDER == "SUBSTANCE" & baseline$S0SGEND == "2",]
+both_dat_M <- baseline[baseline$DISORDER == "BOTH" & baseline$S0SGEND == "1", ]
+both_dat_F <- baseline[baseline$DISORDER == "BOTH" & baseline$S0SGEND == "2", ]
+none_dat_M <- baseline[baseline$DISORDER == "NONE" & baseline$S0SGEND == "1",]
+none_dat_F <- baseline[baseline$DISORDER == "NONE" & baseline$S0SGEND == "2",]
+
+x <- mh_dat_M$CRIME_FREQ
+n <- length(mh_dat_M$CRIME_FREQ)
+med.vec_MH <- replicate(10000, median(sample(x, n, replace = T)))
+MH_SE_M = sd(med.vec_MH)
+
+x <- mh_dat_F$CRIME_FREQ
+n <- length(mh_dat_F$CRIME_FREQ)
+med.vec_MH <- replicate(10000, median(sample(x, n, replace = T)))
+MH_SE_F <- sd(med.vec_MH)
+
+x <- sub_dat_M$CRIME_FREQ
+n <- length(sub_dat_M$CRIME_FREQ)
+med.vec_sub <- replicate(10000, median(sample(x, n, replace = T)))
+SUB_SE_M <- sd(med.vec_sub)
+
+x <- sub_dat_F$CRIME_FREQ
+n <- length(sub_dat_F$CRIME_FREQ)
+med.vec_sub <- replicate(10000, median(sample(x, n, replace = T)))
+SUB_SE_F <- sd(med.vec_sub)
+
+x <- both_dat_M$CRIME_FREQ
+n <- length(both_dat_M$CRIME_FREQ)
+med.vec_both <- replicate(10000, median(sample(x, n, replace = T)))
+BOTH_SE_M <- sd(med.vec_both)
+
+x <- both_dat_F$CRIME_FREQ
+n <- length(both_dat_F$CRIME_FREQ)
+med.vec_both <- replicate(10000, median(sample(x,n,replace=T)))
+BOTH_SE_F <- sd(med.vec_both)
+
+x <- none_dat_M$CRIME_FREQ
+n <- length(none_dat_M$CRIME_FREQ)
+med.vec_none <- replicate(10000, median(sample(x,n,replace=T)))
+NONE_SE_M <- sd(med.vec_none)
+
+x <- none_dat_F$CRIME_FREQ
+n <- length(none_dat_F$CRIME_FREQ)
+med.vec_none <- replicate(10000, median(sample(x,n,replace=T)))
+NONE_SE_F <- sd(med.vec_none)
+
+
+SE <- c(BOTH_SE_M, BOTH_SE_F, SUB_SE_M, SUB_SE_F, MH_SE_M, MH_SE_F, NONE_SE_M, NONE_SE_F)
+DISORDER <- c("BOTH", "BOTH", "SUBSTANCE", "SUBSTANCE", "MH", "MH", "NONE", "NONE")
+SIG <- c("a", "a", "a", "a", "b", "b", "b", "b")
+SE_TABLE <- data.frame(DISORDER, disorder_specifics$S0SGEND, disorder_specifics$median, disorder_specifics$sum, SE, SIG)
+colnames(SE_TABLE) <- c("DISORDER", "GENDER", "MEDIAN", "SUM", "SE", "TUKEY")
+SE_TABLE
+order <- c("BOTH", "SUBSTANCE", "MH", "NONE")
+SE_TABLE$DISORDER <- factor(SE_TABLE$DISORDER, levels = order)
+levels(SE_TABLE$DISORDER)
+
+ggplot(SE_TABLE, aes(x = factor(DISORDER, labels = c("Both", "Substance Use", "Mental Health", "None")), y = MEDIAN, shape = factor(GENDER), color = factor(GENDER))) + geom_point(size = 4) + labs( x = "Disorder", y = "Median Criminal Activity", shape = "Gender", colour = "Gender") + scale_shape_discrete(labels = c("Male", "Female")) + scale_color_discrete(labels = c("Male", "Female")) + theme_classic() + theme(axis.text=element_text(size=16), axis.title=element_text(size=18), legend.text = element_text(size = 16), legend.title = element_text(size = 18)) + theme(legend.position = c(.87, .8)) + geom_errorbar(aes(ymin = MEDIAN - SE, ymax = MEDIAN + SE), width = 0.2) + annotate("text", x = 1, y = 148, label = "a", cex = 6) + annotate("text", x = 2, y = 84, label = "a", cex = 6) + annotate("text", x = 3, y = 28, label = "b", cex = 6) +  annotate("text", x = 4, y = 19, label = "b", cex = 6)
+
+```
+
+
+
+#Table Values
+```{r}
+
+baseline_small %>% group_by(DISORDER) %>% dplyr::summarise(mean = mean(CRIME_FREQ), sd = sd(CRIME_FREQ), .groups = "keep")
+
+baseline_small %>% group_by(DISORDER) %>% dplyr::summarise(mean = mean(S0PARMNT), sd = sd(S0PARMNT), .groups = "keep")
+
+baseline_small %>% group_by(DISORDER) %>% dplyr::summarise(mean = mean(S0PRBEHV), sd = sd(S0PRBEHV), .groups = "keep")
+
+baseline_small %>% group_by(DISORDER) %>% dplyr::summarise(mean = mean(S0EXPTOT), sd = sd(S0EXPTOT), .groups = "keep")
+
+baseline_small %>% group_by(DISORDER) %>% dplyr::summarise(mean = mean(S0AGE1STOFFENSE), sd = sd(S0AGE1STOFFENSE), .groups = "keep")
+
+baseline_small %>% group_by(DISORDER) %>% dplyr::summarise(mean = mean(S0PAKNOW), sd = sd(S0PAKNOW), .groups = "keep")
+
+baseline %>% group_by(DISORDER) %>% dplyr::summarise(mean = mean(CRIME_FREQ), sd = sd(CRIME_FREQ), min = min(CRIME_FREQ), max = max(CRIME_FREQ), .groups = "keep")
+
+```
+
+
+
+
+
+
+
