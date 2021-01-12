@@ -13,6 +13,7 @@ Along with investigating the impacts of mental health and substance use, further
 - `CriminalActivityPlot.png`: Median Criminal Activity plot showing differences by gender. Letters show which groups are statistically different from one another.
 - `DecisionTree.png`: Decision tree created from best predictors model.
 - `VariableImportance.png`: Variable importance plot.
+- `DDF Poster JHebert.pdf`: Final poster for conference presentations.
 
 
 # References
